@@ -1,0 +1,7 @@
+# 共有 .venv（playgraund/.venv）にインストール済み。再構築時は:
+#   ..\.venv\Scripts\python.exe -m pip install -r server\requirements.txt
+fastapi
+uvicorn[standard]
+segno
+anthropic
+httpx        # テスト（TestClient）用

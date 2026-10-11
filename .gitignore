@@ -1,0 +1,19 @@
+# ---- 秘密情報（絶対にコミットしない） ----
+js/config.js
+server/.env
+.env
+*.env
+
+# ---- 実行時データ ----
+data/
+*.db
+*.sqlite3
+
+# ---- 開発用の作業ファイル ----
+_backup_*/
+.claude/
+tests/screenshots/*.png
+__pycache__/
+*.pyc
+.venv/
+node_modules/

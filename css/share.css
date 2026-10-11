@@ -1,0 +1,57 @@
+/* ============================================================
+   参加者ページ（/s/{token}）のスタイル。スマホで開かれる前提の1カラム。
+   共通トークン・ボタン・チップ・朱印・旅程案カードは css/tokens.css
+   ============================================================ */
+.sh-body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 92% 6%, transparent 0 88px, rgba(30, 95, 90, 0.12) 89px 91px, transparent 92px 150px, rgba(30, 95, 90, 0.08) 151px 153px, transparent 154px 220px, rgba(30, 95, 90, 0.05) 221px 223px, transparent 224px),
+    radial-gradient(circle at 4% 96%, transparent 0 60px, rgba(196, 64, 46, 0.12) 61px 63px, transparent 64px 118px, rgba(196, 64, 46, 0.07) 119px 121px, transparent 122px),
+    var(--paper);
+}
+.sh-app { max-width: 720px; margin: 0 auto; padding: 22px 16px 60px; display: flex; flex-direction: column; gap: 14px; }
+.sh-head { text-align: center; padding: 6px 0 4px; animation: rise-in 0.5s ease both; }
+.sh-brand { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; letter-spacing: 0.1em; font-size: 0.86rem; color: var(--ink-2); }
+.sh-brand .brand-mark { width: 26px; height: 26px; border-radius: 8px; }
+.sh-brand .brand-mark .material-symbols-outlined { font-size: 16px; }
+.sh-title { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; letter-spacing: 0.04em; margin: 8px 0 2px; }
+.sh-sub { margin: 0 0 8px; font-size: 0.86rem; color: var(--ink-2); font-family: var(--font-num); }
+.sh-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--sh-card);
+  padding: 20px 18px;
+  animation: rise-in 0.5s ease both;
+  animation-delay: 80ms;
+}
+.sh-loading, .sh-error { display: flex; align-items: center; gap: 8px; justify-content: center; color: var(--ink-2); }
+.sh-error .material-symbols-outlined { color: var(--shu); }
+.sh-h2 { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; letter-spacing: 0.03em; }
+.sh-h2-sm { font-size: 1rem; margin-bottom: 8px; }
+.sh-lead { font-size: 0.88rem; color: var(--ink-2); margin: 6px 0 16px; }
+.sh-lead b { color: var(--shu); font-family: var(--font-num); }
+.sh-form .field input, .sh-form .field textarea { font-size: 16px; } /* iOS の自動ズームを防ぐ */
+.sh-form .chip { padding: 9px 14px; font-size: 0.86rem; }
+.sh-form .btn-lg { width: 100%; margin-top: 4px; }
+.sh-thanks, .sh-decided { text-align: center; }
+.sh-thanks .stamp-big, .sh-decided .stamp-big { margin: 4px auto 14px; }
+.sh-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.sh-nick { max-width: 320px; margin-bottom: 0; }
+.sh-nick input { font-size: 16px; }
+.sh-foot { text-align: center; font-size: 0.78rem; color: var(--ink-3); }
+.tally-list { display: flex; flex-direction: column; gap: 6px; }
+.tally-row { display: grid; grid-template-columns: 96px 1fr 28px; align-items: center; gap: 8px; font-size: 0.82rem; }
+.tally-row i { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--tetsu), var(--tetsu-line)); width: var(--w, 0%); min-width: 6px; transition: width 0.4s ease; }
+.tally-row b { text-align: right; font-family: var(--font-num); color: var(--tetsu-2); }
+.proposal-grid { grid-template-columns: 1fr; }
+@media (min-width: 640px) { .proposal-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+
+/* 見出し下の絵馬掛け（装飾）：木の棒に3枚のミニ絵馬 */
+.sh-rack { position: relative; display: flex; justify-content: center; gap: 14px; margin: 12px auto 4px; max-width: 360px; padding-top: 6px; }
+.sh-rack::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 8px; border-radius: 4px; background: linear-gradient(180deg, #cfa878, #9a6d3c); box-shadow: 0 2px 3px rgba(60, 45, 20, 0.3); }
+.sh-rack .ema-cord { height: 16px; }
+.sh-rack .ema-mini { font-size: 0.78rem; padding: 13px 13px 7px; }
+.sh-rack .ema-hang-mini:nth-child(2) { animation-delay: -2s; }
+.sh-rack .ema-hang-mini:nth-child(3) { animation-delay: -4s; }
+.sh-card.ema-write { border-top: none; border-radius: 0 0 18px 18px; }

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>たびえま</title>
+  <!-- アプリアイコン（assets/icon.png から生成。ファビコン・スマホのホーム画面・PWA） -->
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1e5f5a">
+  <!-- 書体：見出しは Shippori Mincho B1（旅雑誌のような明朝）、本文・数字は IBM Plex Sans JP（等幅数字） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;600;700;800&family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0" rel="stylesheet">
+  <!-- Leaflet（APIキー未設定時のフォールバック地図） -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="mode-plan">
+  <header class="app-header">
+    <!-- 左：ブランド（押すとホーム＝どこへ行きますか？へ） -->
+    <button type="button" id="home-btn" class="brand-btn" title="ホームへ（どこへ行きますか？）">
+      <img class="brand-mark" src="assets/icon-192.png" alt="" aria-hidden="true">
+      <span class="brand-name">たびえま</span>
+    </button>
+    <!-- 開いている旅の名前（編集可）と進行状態のスタンプ。サーバーなしのときは案内だけ -->
+    <div class="project-title">
+      <input type="text" id="project-name-input" class="project-name" aria-label="旅の名前" placeholder="旅の名前" maxlength="80" hidden>
+      <span id="project-status" class="status-stamp" hidden></span>
+      <span id="offline-note" class="offline-note" hidden
+            title="サーバー（server/main.py）を起動すると、これまでの旅・共有リンク・投票・履歴DBが使えます">ローカル保存モード</span>
+    </div>
+    <!-- 保存：自動保存に加えて、押した瞬間に書き出して結果を表示する -->
+    <div id="save-area" class="save-area">
+      <button type="button" id="save-btn" class="btn btn-outline btn-sm" title="いまの旅のルートを保存"><span class="material-symbols-outlined">save</span>保存</button>
+      <span id="save-status" class="save-status" aria-live="polite"></span>
+    </div>
+    <!-- 画面モード：計画／みんなで決める／行った場所（サーバーモードのみ表示） -->
+    <nav id="mode-tabs" class="mode-tabs" role="tablist" aria-label="画面の切り替え" hidden>
+      <button type="button" class="mode-tab active" data-mode="plan" role="tab" aria-selected="true"><span class="material-symbols-outlined">route</span>計画</button>
+      <button type="button" class="mode-tab" data-mode="collab" role="tab" aria-selected="false"><span class="ema-icon" aria-hidden="true"></span>みんなで決める<span id="mode-collab-badge" class="mode-badge" hidden></span></button>
+      <button type="button" class="mode-tab" data-mode="history" role="tab" aria-selected="false"><span class="material-symbols-outlined">menu_book</span>行った場所</button>
+    </nav>
+    <div class="header-controls">
+      <!-- 検索条件：行き先｜開始｜終了 の分割フィールド。クリックでカスタムカレンダーが開く -->
+      <div class="search-pill">
+        <label class="pill-item">行き先
+          <select id="region-select"></select>
+        </label>
+        <button type="button" id="date-field-start" class="pill-item pill-field"
+                aria-haspopup="dialog" aria-expanded="false" aria-controls="date-range-popover">
+          <span class="pill-field-label">開始</span>
+          <span class="pill-field-value" id="date-field-start-value">–</span>
+        </button>
+        <button type="button" id="date-field-end" class="pill-item pill-field"
+                aria-haspopup="dialog" aria-expanded="false" aria-controls="date-range-popover">
+          <span class="pill-field-label">終了</span>
+          <span class="pill-field-value" id="date-field-end-value">–</span>
+        </button>
+      </div>
+      <!-- この旅のメニュー（完了して記録／複製／リセット／削除） -->
+      <details id="project-menu" class="project-menu">
+        <summary class="icon-btn menu-btn" aria-label="この旅のメニュー" title="この旅のメニュー"><span class="material-symbols-outlined">more_horiz</span></summary>
+        <div class="menu-list">
+          <button type="button" id="archive-btn" class="server-only" hidden><span class="material-symbols-outlined">verified</span>旅を完了して記録</button>
+          <button type="button" id="duplicate-btn" class="server-only" hidden><span class="material-symbols-outlined">content_copy</span>この旅を複製</button>
+          <button type="button" id="reset-btn" class="menu-danger"><span class="material-symbols-outlined">restart_alt</span>計画をリセット</button>
+          <button type="button" id="delete-project-btn" class="server-only menu-danger" hidden><span class="material-symbols-outlined">delete</span>この旅を削除</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <!-- ======================= 計画（3ペイン：候補／日程／地図） ======================= -->
+  <main id="plan-view" class="layout">
+    <!-- 左：スポット・ホテル・交通を探す -->
+    <section class="panel panel-spots">
+      <div class="panel-tabs" role="tablist" aria-label="探すものの切り替え">
+        <button class="ptab active" data-tab="spots" role="tab" aria-selected="true" aria-controls="tab-spots"><span class="material-symbols-outlined">attractions</span>スポット</button>
+        <button class="ptab" data-tab="hotels" role="tab" aria-selected="false" aria-controls="tab-hotels"><span class="material-symbols-outlined">hotel</span>ホテル</button>
+        <button class="ptab" data-tab="transport" role="tab" aria-selected="false" aria-controls="tab-transport"><span class="material-symbols-outlined">train</span>交通</button>
+      </div>
+
+      <!-- スポットタブ -->
+      <div id="tab-spots" class="tab-body">
+
+      <!-- Google Places 検索（APIキー設定時のみ表示） -->
+      <div id="google-search" class="google-search" hidden>
+        <div class="search-box">
+          <input type="text" id="place-query" placeholder="Googleマップで検索（例：京都 ラーメン）">
+          <button id="place-search-btn" class="search-btn" title="検索" aria-label="検索"><span class="material-symbols-outlined">search</span></button>
+        </div>
+        <ul id="place-results" class="place-results"></ul>
+      </div>
+
+      <div class="spot-filters">
+        <input type="text" id="spot-search" placeholder="候補リストを名前で絞り込み…">
+        <div class="filter-btns">
+          <button class="chip active" data-filter="all">すべて</button>
+          <button class="chip" data-filter="sightseeing">観光</button>
+          <button class="chip" data-filter="food">グルメ</button>
+          <button class="chip" data-filter="custom">マイ追加</button>
+        </div>
+      </div>
+      <!-- 候補リスト＋以前行った場所＋人気スポットをまとめてスクロールさせる領域 -->
+      <div class="spot-scroll">
+        <ul id="spot-list" class="spot-list"></ul>
+
+        <!-- 以前行った場所（履歴DB。サーバーモードで、この行き先の記録があるときだけ表示） -->
+        <div id="history-spots" class="popular-spots history-spots" hidden>
+          <div class="popular-head">
+            <h3><span class="material-symbols-outlined">menu_book</span>以前行った場所</h3>
+          </div>
+          <ul id="history-results" class="place-results"></ul>
+        </div>
+
+        <!-- このエリアの人気スポット（GoogleモードのみsetupPopularSpotsで表示。stateには保存しない） -->
+        <div id="popular-spots" class="popular-spots" hidden>
+          <div class="popular-head">
+            <h3><span class="material-symbols-outlined">local_fire_department</span>このエリアの人気スポット</h3>
+          </div>
+          <ul id="popular-results" class="place-results"></ul>
+        </div>
+      </div>
+
+      <details class="custom-spot">
+        <summary><span class="material-symbols-outlined">add_location_alt</span>見つからない場所を自分で追加</summary>
+        <div class="custom-form">
+          <input type="text" id="custom-name" placeholder="場所の名前（必須）">
+          <select id="custom-category">
+            <option value="sightseeing">観光</option>
+            <option value="food">グルメ</option>
+          </select>
+          <input type="text" id="custom-desc" placeholder="メモ（任意）">
+          <div class="custom-row">
+            <label>滞在 <input type="number" id="custom-stay" value="60" min="5" step="5">分</label>
+            <label>費用 <input type="number" id="custom-cost" value="0" min="0" step="100">円</label>
+          </div>
+          <button id="pick-location-btn" class="btn btn-tonal">
+            <span class="material-symbols-outlined">pin_drop</span>地図をクリックして位置を指定
+          </button>
+          <div id="picked-location" class="picked-location">位置：未設定（地図中心を使用）</div>
+          <button id="add-custom-btn" class="btn btn-filled">この場所を追加</button>
+        </div>
+      </details>
+      </div><!-- /tab-spots -->
+
+      <!-- ホテルタブ -->
+      <div id="tab-hotels" class="tab-body" hidden>
+        <div class="filter-btns hotel-sort">
+          <button class="chip active" data-sort="recommend">おすすめ順</button>
+          <button class="chip" data-sort="price">安い順</button>
+          <button class="chip" data-sort="rating">評価順</button>
+        </div>
+        <p class="hint">「この日の宿にする」で選択中の日の宿になります。料金は1泊1人あたりの目安（あとで編集可）。</p>
+        <ul id="hotel-list" class="spot-list"></ul>
+      </div>
+
+      <!-- 交通タブ -->
+      <div id="tab-transport" class="tab-body" hidden>
+        <h3 class="transport-heading"><span class="material-symbols-outlined">home_pin</span>出発地</h3>
+        <div id="origin-current" class="origin-current"></div>
+        <div class="search-box">
+          <input type="text" id="origin-query" placeholder="最寄り駅・空港・住所を検索（例：大阪駅）">
+          <button id="origin-search-btn" class="search-btn" title="検索" aria-label="検索"><span class="material-symbols-outlined">search</span></button>
+        </div>
+        <ul id="origin-results" class="place-results"></ul>
+        <p class="hint">出発地を登録すると、距離から金額と所要時間を自動見積もりします（1人あたり片道・概算）。選択後に金額を編集できます。</p>
+        <h3 class="transport-heading"><span class="material-symbols-outlined">flight_takeoff</span>往路（行き）</h3>
+        <ul id="transport-out" class="transport-list"></ul>
+        <h3 class="transport-heading"><span class="material-symbols-outlined">flight_land</span>復路（帰り）</h3>
+        <ul id="transport-ret" class="transport-list"></ul>
+      </div>
+    </section>
+
+    <!-- 中央：日程タイムライン -->
+    <section class="panel panel-plan">
+      <h2><span class="material-symbols-outlined">calendar_month</span>旅の日程</h2>
+      <div id="day-tabs" class="day-tabs" role="tablist" aria-label="日にちの切り替え"></div>
+      <div class="day-settings">
+        <label><span id="start-time-label">この日の出発時刻</span>
+          <input type="time" id="day-start-time" value="09:00">
+        </label>
+        <button id="ai-sort-btn" class="btn btn-tonal ai-sort-btn"
+          title="移動距離と食事の時間帯から、この日の訪問順と移動時間を自動で最適化します">
+          <span class="material-symbols-outlined">auto_awesome</span>AIおすすめ順
+        </button>
+      </div>
+      <!-- 天気予報（Open-Meteo）。データがない・取得失敗時は非表示のまま -->
+      <div id="weather-summary" class="weather-summary" hidden></div>
+      <ol id="timeline" class="timeline"></ol>
+      <div id="hotel-slot"></div>
+      <div class="totals">
+        <div class="totals-breakdown">
+          <span title="表示中の日のスポット費用">この日 <b id="day-total">¥0</b></span>
+          <span>スポット <b id="spot-total">¥0</b></span>
+          <span title="スポット間の移動（電車・バス・タクシー）の合計">移動 <b id="move-total">¥0</b></span>
+          <span>宿泊 <b id="hotel-total">¥0</b></span>
+          <span title="出発地との往復交通費">交通 <b id="transport-total">¥0</b></span>
+        </div>
+        <div class="grand">旅行全体の合計：<span id="grand-total">¥0</span></div>
+      </div>
+    </section>
+
+    <!-- 右：地図 -->
+    <section class="panel panel-map">
+      <h2><span class="material-symbols-outlined">map</span>ルートマップ</h2>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <!-- 自前の全画面ボタン（.map-wrapごと全画面化するので検索欄・シートも使える） -->
+        <button id="map-fullscreen-btn" class="map-fullscreen-btn" title="地図を全画面表示" aria-label="地図を全画面表示">
+          <span class="material-symbols-outlined">fullscreen</span>
+        </button>
+        <!-- 地図上の検索（GoogleモードのみsetupMapSearchで表示する） -->
+        <div id="map-search" class="map-search" hidden>
+          <div class="search-box">
+            <input type="text" id="map-search-input" placeholder="この範囲で検索（例：ラーメン）">
+            <button id="map-search-clear" class="search-btn" hidden title="検索をクリア" aria-label="検索をクリア"><span class="material-symbols-outlined">close</span></button>
+            <button id="map-search-btn" class="search-btn" title="検索" aria-label="検索"><span class="material-symbols-outlined">search</span></button>
+          </div>
+        </div>
+        <button id="map-research-btn" class="map-research-btn" hidden>
+          <span class="material-symbols-outlined">refresh</span>このエリアを検索
+        </button>
+        <!-- 人気スポットの範囲更新（Googleモードのみ。結果は左パネルの「このエリアの人気スポット」へ） -->
+        <button id="popular-map-btn" class="map-research-btn popular-map-btn" hidden
+                title="いま地図に見えている範囲で人気スポットを探し直します">
+          <span class="material-symbols-outlined">local_fire_department</span>この範囲の人気スポット
+        </button>
+        <!-- 検索結果のボトムシート（つまみのドラッグ/タップで開閉） -->
+        <div id="map-results-sheet" class="map-results-sheet" hidden>
+          <div id="map-sheet-handle" class="sheet-handle" role="button" tabindex="0"
+               aria-controls="map-search-results" aria-expanded="false" aria-label="検索結果の表示切り替え">
+            <span class="sheet-grip" aria-hidden="true"></span>
+            <span id="map-sheet-title" class="sheet-title"></span>
+          </div>
+          <ul id="map-search-results" class="place-results map-search-results"></ul>
+          <!-- 結果タップで開くシート内詳細（リストと入れ替わりで表示） -->
+          <div id="map-sheet-detail" class="map-sheet-detail" hidden></div>
+        </div>
+      </div>
+      <p class="map-hint">番号ピン＝この日の訪問順。候補スポットは小さい丸ピン。
+        青い点線＝出発地からの交通経路（🏠出発地・✈️🚄🚌は乗り継ぎ点。1日目と最終日に表示）。</p>
+    </section>
+  </main>
+
+  <!-- ======================= みんなで決める ======================= -->
+  <section id="collab-view" class="view collab-view" hidden>
+    <div class="collab-grid">
+      <aside class="collab-side">
+        <div class="card share-card">
+          <h2 class="card-title"><span class="material-symbols-outlined">qr_code_2</span>参加者を招待</h2>
+          <p class="card-lead">リンクかQRを送ると、登録なし・匿名で絵馬（行きたい）を掛けてもらえます。</p>
+          <div id="share-qr" class="share-qr" aria-live="polite"></div>
+          <div class="share-url-row">
+            <input type="text" id="share-url" readonly aria-label="共有リンク">
+            <button type="button" id="share-copy" class="btn btn-outline"><span class="material-symbols-outlined">content_copy</span>コピー</button>
+          </div>
+          <p class="hint" id="share-note"></p>
+        </div>
+        <div class="card phase-card">
+          <h2 class="card-title"><span class="material-symbols-outlined">flag</span>進めかた</h2>
+          <ol id="phase-steps" class="phase-steps">
+            <li data-phase="collecting"><b>1</b><span>絵馬を集める</span></li>
+            <li data-phase="proposals"><b>2</b><span>AIが旅程案をつくる</span></li>
+            <li data-phase="voting"><b>3</b><span>みんなで投票</span></li>
+            <li data-phase="decided"><b>4</b><span>決定して日程へ</span></li>
+          </ol>
+          <div id="phase-actions" class="phase-actions"></div>
+        </div>
+      </aside>
+      <div class="collab-main">
+        <section class="card wishes-card">
+          <div class="card-head">
+            <h2 class="card-title"><span class="ema-icon" aria-hidden="true"></span>みんなの絵馬 <span id="wish-count" class="count-badge">0</span></h2>
+            <button type="button" id="wish-refresh" class="icon-btn" title="最新にする" aria-label="最新にする"><span class="material-symbols-outlined">refresh</span></button>
+          </div>
+          <div id="wish-tally" class="wish-tally"></div>
+          <div id="wish-board" class="ema-board"></div>
+          <details class="owner-wish">
+            <summary><span class="ema-icon" aria-hidden="true"></span>自分の絵馬を掛ける</summary>
+            <form id="owner-wish-form" class="wish-form"></form>
+          </details>
+        </section>
+        <section class="card proposals-card">
+          <div class="card-head">
+            <h2 class="card-title"><span class="material-symbols-outlined">auto_awesome</span>旅程案</h2>
+            <button type="button" id="generate-btn" class="btn btn-filled"><span class="material-symbols-outlined">auto_awesome</span>AIで旅程案をつくる</button>
+          </div>
+          <p id="proposal-note" class="hint"></p>
+          <div id="proposal-grid" class="proposal-grid"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 行った場所（履歴DB） ======================= -->
+  <section id="history-view" class="view history-view" hidden>
+    <div class="history-inner">
+      <header class="view-head">
+        <div>
+          <h2 class="view-title">行った場所</h2>
+          <p class="view-lead">旅を完了すると、店舗情報（住所・評価・電話・サイト）ごとここに残ります。次の旅では候補リストにワンタップで戻せます。</p>
+        </div>
+        <div class="search-box history-search-box">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input type="text" id="history-search" placeholder="名前・住所・メモで探す" aria-label="行った場所を探す">
+        </div>
+      </header>
+      <div id="history-regions" class="filter-btns filter-wrap" aria-label="地域で絞り込み"></div>
+      <div class="history-count-row">記録 <b id="history-count">0</b> 件</div>
+      <div id="history-list" class="history-grid"></div>
+      <h3 class="view-h3"><span class="material-symbols-outlined">luggage</span>おわった旅</h3>
+      <div id="history-trips" class="trip-list"></div>
+    </div>
+  </section>
+
+  <!-- ======================= ホーム：どこへ行きますか？ =======================
+       行き先の検索・人気の行き先・これまでの旅（サーバーモード）。中身はJS（renderHeroCards / Projects.renderHeroTrips）が描画 -->
+  <div id="hero-screen" class="hero-screen" role="dialog" aria-label="どこへ行きますか？" hidden>
+    <span class="hero-chip hero-chip-1" aria-hidden="true"><span class="ema-hang-mini"><i class="ema-cord"></i><span class="ema-mini">✈️ 週末は小旅行</span></span></span>
+    <span class="hero-chip hero-chip-2" aria-hidden="true"><span class="ema-hang-mini"><i class="ema-cord"></i><span class="ema-mini">🏔 絶景を探しに</span></span></span>
+    <span class="hero-chip hero-chip-3" aria-hidden="true"><span class="ema-hang-mini"><i class="ema-cord"></i><span class="ema-mini">🍜 ご当地グルメも</span></span></span>
+    <div class="hero-inner">
+      <button type="button" id="hero-close" class="icon-btn hero-close" title="閉じて計画画面へ" aria-label="閉じて計画画面へ">✕</button>
+      <p class="hero-kicker">たびえま — みんなの願いを、旅のしおりに</p>
+      <h2 class="hero-title">どこへ行きますか？</h2>
+      <p class="hero-lead" id="hero-lead">行き先を選ぶと、新しい旅の準備がはじまります</p>
+      <!-- 全国検索（GoogleモードのみopenHeroで表示） -->
+      <div id="hero-search" class="hero-search" hidden>
+        <div class="search-box hero-search-box">
+          <input type="text" id="hero-dest-query" placeholder="全国から行き先を検索（例：金沢、草津温泉）">
+          <button id="hero-search-btn" class="search-btn" title="検索" aria-label="検索"><span class="material-symbols-outlined">search</span></button>
+        </div>
+        <ul id="hero-dest-results" class="hero-dest-results"></ul>
+      </div>
+      <!-- キーなし（Leaflet）モードの案内 -->
+      <p id="hero-keyless-note" class="hero-keyless-note" hidden>
+        Google Maps APIキーを設定すると全国どこでも行き先にできます（設定方法はREADME参照）。いまは下の地域から選べます。
+      </p>
+      <h3 class="hero-subtitle">人気の行き先</h3>
+      <div id="hero-region-cards" class="hero-cards"></div>
+      <!-- これまでの旅（サーバーモードのホームだけ表示） -->
+      <section id="hero-trips-section" class="hero-trips" hidden>
+        <div class="hero-trips-head">
+          <h3 class="hero-subtitle">これまでの旅</h3>
+          <button type="button" id="hero-history-link" class="btn btn-text btn-sm"><span class="material-symbols-outlined">menu_book</span>行った場所の記録</button>
+        </div>
+        <div id="hero-trips" class="project-grid"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ======================= 新しい旅のウィザード（いつ行く→みんなの希望→旅程案） =======================
+       中身はJS（wizard.js）がステップごとに描画 -->
+  <div id="wizard-screen" class="wizard-screen" role="dialog" aria-label="新しい旅の準備" hidden>
+    <div class="wizard-inner">
+      <header class="wizard-head">
+        <img class="brand-mark" src="assets/icon-192.png" alt="" aria-hidden="true">
+        <div class="wizard-title-wrap">
+          <p class="hero-kicker">新しい旅の準備</p>
+          <h2 id="wizard-title" class="wizard-title"></h2>
+        </div>
+        <ol id="wizard-steps" class="wizard-steps" aria-label="手順">
+          <li data-step="1"><span>行き先</span></li>
+          <li data-step="2"><span>いつ行く</span></li>
+          <li data-step="3"><span>みんなの希望</span></li>
+          <li data-step="4"><span>旅程案</span></li>
+        </ol>
+        <button type="button" id="wizard-close" class="icon-btn wizard-close" title="閉じて計画画面へ" aria-label="閉じて計画画面へ">✕</button>
+      </header>
+      <div id="wizard-body" class="wizard-body"></div>
+    </div>
+  </div>
+
+  <!-- スポット詳細モーダル -->
+  <div id="detail-overlay" class="detail-overlay" hidden>
+    <div class="detail-card" role="dialog" aria-modal="true" aria-label="スポット詳細">
+      <button id="detail-close" class="icon-btn detail-close" title="閉じる" aria-label="閉じる">✕</button>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- 日付範囲カレンダー（ヘッダーの開始/終了フィールドから開くポップオーバー） -->
+  <div id="date-range-popover" class="date-range-popover" role="dialog" aria-label="旅行日程を選択" hidden>
+    <button type="button" id="drp-prev" class="drp-nav-btn drp-nav-prev" aria-label="前の月へ">
+      <span class="material-symbols-outlined">chevron_left</span>
+    </button>
+    <button type="button" id="drp-next" class="drp-nav-btn drp-nav-next" aria-label="次の月へ">
+      <span class="material-symbols-outlined">chevron_right</span>
+    </button>
+    <div id="drp-months" class="drp-months"></div>
+    <p id="drp-hint" class="drp-hint" aria-live="polite"></p>
+  </div>
+
+  <!-- モバイル：全画面地図を開く浮遊ピル（地図パネルが見えている間はJSが隠す） -->
+  <button id="map-jump-btn" class="map-jump-btn" hidden title="地図を全画面で表示">
+    <span class="material-symbols-outlined">map</span>地図
+  </button>
+
+  <!-- 一時通知（スナックバー） -->
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/weather.js"></script>
+  <!-- サーバー連携（api → projects → collab → history → wizard）。app.js より先に読み込む -->
+  <script src="js/api.js"></script>
+  <script src="js/projects.js"></script>
+  <script src="js/collab.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/wizard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+/* ============================================================
+   旅の作戦会議 デザインシステム v3 — 共通トークン＆共用部品
+   コンセプト：「和紙の作戦盤に、鉄色の道しるべと朱印」
+   - 紙（和紙の生成り）と墨で落ち着いた地をつくり、
+     主操作・選択・訪問順ピンは鉄色（青緑）1色に絞る
+   - みんなの要望＝絵馬（木）、投票＝朱印（朱）、AI・評価＝山吹（金）
+     という3つの見立てを、機能ごとの固有色として使い分ける
+   - 見出しは明朝（Shippori Mincho B1）で旅雑誌の趣、本文と数字は
+     IBM Plex Sans JP（等幅数字で時刻・金額が揃う）
+   index.html（style.css）と share.html（share.css）の両方が読み込む
+   ============================================================ */
+
+:root {
+  /* 紙と墨 */
+  --paper: #f5f0e6;        /* ページの地（和紙） */
+  --paper-2: #ebe4d4;      /* 一段沈んだ面・ホバー・情報帯 */
+  --card: #fffdf8;         /* カード・パネルの面 */
+  --ink: #1f2a30;          /* 墨：主要テキスト */
+  --ink-2: #566369;        /* 薄墨：補助テキスト（card上 6:1） */
+  --ink-3: #8b959b;        /* プレースホルダー・装飾 */
+  --line: #e2dbc9;         /* 罫線 */
+  --line-2: #c3b89f;       /* 入力枠・押せる枠線 */
+
+  /* 鉄色（青緑）：主ボタン・選択状態・訪問順バッジ／ピン・ルート線 */
+  --tetsu: #1e5f5a;
+  --tetsu-2: #174b47;      /* ホバー */
+  --tetsu-soft: #dcebe6;   /* 選択の淡い面 */
+  --tetsu-line: #9fc9c0;   /* 点線ルート */
+
+  /* 朱：投票の朱印・「いま1位」・危険操作 */
+  --shu: #c4402e;
+  --shu-2: #a3311f;
+  --shu-soft: #f8e4df;
+
+  /* 山吹：AI・評価★・注意 */
+  --yamabuki: #d9a441;
+  --yamabuki-soft: #f7ecd2;
+  --yamabuki-text: #7a4b00;  /* yamabuki-soft 上で読める濃色 */
+
+  /* 木：絵馬 */
+  --wood: #dfc19a;
+  --wood-2: #c19a68;
+  --wood-ink: #46331f;
+
+  --success: #2e7d4f;
+  --danger: #b3261e;
+  --search-pin: #5b4a9c;   /* 地図検索の仮ピン（藤色。訪問順ピンと区別） */
+  --search-pin-active: #43367a;
+
+  /* 形 */
+  --r-card: 14px;
+  --r-sm: 10px;
+  --r-pill: 9999px;
+  --r-input: 8px;
+
+  /* 影：紙の上に紙が重なる、暖色系の柔らかい影 */
+  --sh-card: 0 1px 2px rgba(60, 45, 20, 0.06), 0 2px 10px rgba(60, 45, 20, 0.05);
+  --sh-hover: 0 4px 10px rgba(60, 45, 20, 0.08), 0 16px 34px rgba(60, 45, 20, 0.14);
+  --sh-float: 0 1px 4px rgba(40, 30, 15, 0.12), 0 6px 18px rgba(40, 30, 15, 0.18);
+  --sh-float-raised: 0 2px 8px rgba(40, 30, 15, 0.12), 0 12px 36px rgba(40, 30, 15, 0.26);
+
+  /* 書体 */
+  --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  --font-num: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+
+  /* 和紙のざらつき（SVGノイズ。body::before で薄く重ねる） */
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.28 0 0 0 0 0.18 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ===== ベース ===== */
+* { box-sizing: border-box; }
+/* hidden 属性は display:flex/grid より常に優先する（過去に flex が hidden に勝つ不具合があった） */
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.65;
+  font-feature-settings: "palt" 1; /* 日本語の字間を詰めて見出しを引き締める */
+}
+/* 和紙のざらつきを画面全体に薄く重ねる（装飾。操作は透過） */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--paper-grain);
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+}
+body > * { position: relative; z-index: 1; }
+h1, h2, h3 { margin: 0; line-height: 1.35; }
+button { cursor: pointer; font-family: inherit; color: inherit; }
+input, select, textarea { font-family: inherit; color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--ink-3); }
+a { color: var(--tetsu); }
+b, strong { font-weight: 700; }
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
+a:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.material-symbols-outlined {
+  font-size: 20px;
+  vertical-align: middle;
+  font-variation-settings: "opsz" 20;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #cfc6b1 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #cfc6b1; border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: #b3a88d; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ===== ブランドマーク：鉄色の角丸タイルに羅針盤 ===== */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(150deg, #2a7a73 0%, var(--tetsu) 55%, #123f3b 100%);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(30, 95, 90, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+.brand-mark .material-symbols-outlined { font-size: 22px; font-variation-settings: "FILL" 1, "opsz" 24; }
+.brand-mark-lg { width: 56px; height: 56px; border-radius: 16px; }
+/* img 版（アプリアイコン画像）：塗りは画像そのもの。角丸と影だけ共通 */
+img.brand-mark { background: none; object-fit: cover; padding: 0; display: inline-block; }
+.brand-mark-lg .material-symbols-outlined { font-size: 32px; }
+
+/* ===== ボタン ===== */
+.btn {
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 9px 18px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.3;
+  transition: box-shadow 0.15s, background 0.15s, border-color 0.15s, transform 0.1s, color 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn .material-symbols-outlined { font-size: 18px; }
+.btn-lg { padding: 12px 22px; font-size: 0.95rem; }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+/* 主ボタン：鉄色 */
+.btn-filled {
+  background: linear-gradient(180deg, #23716b 0%, var(--tetsu) 100%);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(30, 95, 90, 0.35);
+}
+.btn-filled:hover { background: linear-gradient(180deg, var(--tetsu) 0%, var(--tetsu-2) 100%); box-shadow: 0 3px 10px rgba(30, 95, 90, 0.35); }
+.btn-filled.busy { animation: btn-pulse 1.2s ease-in-out infinite; }
+@keyframes btn-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(30, 95, 90, 0.35); } 50% { box-shadow: 0 0 0 8px rgba(30, 95, 90, 0); } }
+/* 準ボタン：淡い鉄色（特徴機能：AIおすすめ順・位置指定） */
+.btn-tonal { background: var(--tetsu-soft); color: var(--tetsu-2); }
+.btn-tonal:hover { background: #cde2db; }
+.btn-tonal.picking { background: var(--yamabuki-soft); color: var(--yamabuki-text); }
+/* 線ボタン */
+.btn-outline { background: var(--card); color: var(--ink); border: 1px solid var(--line-2); }
+.btn-outline:hover { border-color: var(--ink); background: var(--paper-2); }
+.btn-text { background: transparent; color: var(--ink-2); }
+.btn-text:hover { background: var(--paper-2); color: var(--ink); }
+.btn-text-danger { background: transparent; color: var(--danger); }
+.btn-text-danger:hover { background: var(--shu-soft); }
+/* 朱印ボタン：投票 */
+.btn-stamp { background: var(--card); color: var(--shu); border: 2px solid var(--shu); }
+.btn-stamp:hover { background: var(--shu-soft); }
+.btn-stamp .material-symbols-outlined { font-variation-settings: "FILL" 1; }
+
+/* 丸いアイコンボタン */
+.icon-btn {
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  list-style: none;
+}
+.icon-btn:hover { background: var(--paper-2); color: var(--ink); }
+
+/* ===== チップ ===== */
+.filter-btns { display: flex; gap: 8px; }
+.filter-wrap { flex-wrap: wrap; }
+.filter-wrap .chip { flex: 0 0 auto; }
+.chip {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--card);
+  font-size: 0.8rem;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s, color 0.15s;
+}
+.chip:hover { border-color: var(--ink); }
+.chip:active { transform: scale(0.96); }
+.chip.active { background: var(--tetsu); color: #fff; border-color: var(--tetsu); font-weight: 600; }
+.chip-set { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-set .chip { flex: 0 0 auto; }
+
+/* ===== フォーム部品（要望フォーム共通） ===== */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field > span { font-size: 0.8rem; font-weight: 600; color: var(--ink-2); display: flex; align-items: baseline; gap: 6px; }
+.field > span small { font-weight: 400; color: var(--ink-3); }
+.field input[type="text"], .field textarea, .field select {
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-input);
+  font-size: 0.92rem;
+  background: var(--card);
+  resize: vertical;
+}
+.field input:focus, .field textarea:focus { border-color: var(--ink); outline: none; }
+.form-actions { display: flex; justify-content: flex-end; }
+
+/* ===== 状態スタンプ（進行状況）：小さな吊り絵馬（五角の屋根＋紐穴）。少し傾いて掛かっている ===== */
+.status-stamp {
+  --ema-top: #efdcb8;
+  --ema-bottom: #e2c69a;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 11px 10px 3px;
+  border: none;
+  border-radius: 2px;
+  clip-path: polygon(50% 0, 100% 34%, 100% 100%, 0 100%, 0 34%);
+  background:
+    radial-gradient(circle at 50% 6px, var(--paper) 0 1.8px, transparent 2.4px),
+    linear-gradient(180deg, var(--ema-top), var(--ema-bottom));
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  transform: rotate(-3deg);
+  color: var(--wood-ink);
+  white-space: nowrap;
+}
+.status-stamp[data-status="voting"] { --ema-top: #f4cdc3; --ema-bottom: #e9a99a; color: var(--shu-2); }
+.status-stamp[data-status="decided"] { --ema-top: #f6e4ae; --ema-bottom: #e9cb78; color: var(--yamabuki-text); }
+.status-stamp[data-status="done"] { --ema-top: #e6e2d8; --ema-bottom: #d1cbbd; color: var(--ink-2); }
+.status-stamp[data-status="local"] { --ema-top: #eae4d6; --ema-bottom: #d9d1c0; color: var(--ink-2); }
+.status-stamp[data-status="editing"] { --ema-top: #f7ecd2; --ema-bottom: #eddcb0; color: var(--yamabuki-text); }
+
+/* ===== 絵馬アイコン（五角の板＋紐穴。currentColor で塗る） ===== */
+.ema-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2 22 9v12H2V9zm0 3.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2 22 9v12H2V9zm0 3.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+  vertical-align: -3px;
+  flex-shrink: 0;
+}
+
+/* ===== ミニ絵馬（紐で吊るす装飾。ホームの浮遊チップ・参加者ページの絵馬掛け） ===== */
+.ema-hang-mini {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  animation: ema-swing 6s ease-in-out infinite;
+  filter: drop-shadow(0 3px 3px rgba(60, 45, 20, 0.3));
+}
+.ema-cord { display: block; width: 2px; height: 22px; background: var(--wood-2); border-radius: 1px; }
+.ema-mini {
+  display: inline-block;
+  padding: 15px 16px 8px;
+  clip-path: polygon(50% 0, 100% 27%, 100% 100%, 0 100%, 0 27%);
+  background:
+    radial-gradient(circle at 50% 8px, var(--paper) 0 2.4px, transparent 3px),
+    linear-gradient(180deg, #ecd9b6 0%, var(--wood) 45%, #d4b287 100%);
+  color: var(--wood-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  border-radius: 2px;
+}
+@keyframes ema-swing {
+  0%, 100% { transform: rotate(-2.5deg); }
+  50% { transform: rotate(2.5deg); }
+}
+/* 触れたときの揺れ：1回だけ、だんだん小さくなって元の傾き（--tilt）に収まる */
+@keyframes ema-swing-once {
+  0% { transform: rotate(var(--tilt, 0deg)); }
+  20% { transform: rotate(calc(var(--tilt, 0deg) + 3.5deg)); }
+  45% { transform: rotate(calc(var(--tilt, 0deg) - 2.5deg)); }
+  70% { transform: rotate(calc(var(--tilt, 0deg) + 1.2deg)); }
+  88% { transform: rotate(calc(var(--tilt, 0deg) - 0.5deg)); }
+  100% { transform: rotate(var(--tilt, 0deg)); }
+}
+
+/* ===== 朱印（投票のしるし） ===== */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--shu);
+  box-shadow: inset 0 0 0 2px var(--card), inset 0 0 0 3px var(--shu);
+  color: var(--shu);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.78rem;
+  line-height: 1;
+  transform: rotate(-9deg);
+  background: var(--card);
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+.stamp-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 28px; }
+.stamp-row .stamp:nth-child(2n) { transform: rotate(7deg); }
+.stamp-row .stamp:nth-child(3n) { transform: rotate(-3deg) translateY(1px); }
+.stamp-more { font-size: 0.78rem; color: var(--shu); font-weight: 700; }
+.stamp-none { font-size: 0.78rem; color: var(--ink-3); }
+.stamp-big { width: 72px; height: 72px; font-size: 1.9rem; border-width: 3px; box-shadow: inset 0 0 0 3px var(--card), inset 0 0 0 5px var(--shu); }
+/* 押印アニメーション：大きく現れて叩きつけられる */
+@keyframes stamp-pop {
+  0% { transform: rotate(-9deg) scale(1.8); opacity: 0; }
+  60% { transform: rotate(-9deg) scale(0.92); opacity: 1; }
+  100% { transform: rotate(-9deg) scale(1); opacity: 0.92; }
+}
+.stamp-pop { animation: stamp-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+
+/* ===== 旅程案カード（主催者画面・参加者ページで共用） ===== */
+.proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.proposal {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-card);
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: rise-in 0.4s ease both;
+}
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.proposal.leading { border-color: var(--shu); box-shadow: 0 0 0 1px var(--shu), var(--sh-card); }
+.proposal.leading::after {
+  content: "いま1位";
+  position: absolute;
+  top: -10px;
+  right: 14px;
+  background: var(--shu);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.06em;
+}
+.proposal.mine { border-color: var(--tetsu); box-shadow: 0 0 0 1px var(--tetsu), var(--sh-card); }
+.proposal.stamped .stamp:last-of-type { animation: stamp-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+.proposal-head { display: flex; align-items: flex-start; gap: 10px; }
+.proposal-index {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.proposal-titles { flex: 1; min-width: 0; }
+.proposal-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; letter-spacing: 0.01em; }
+.proposal-concept { margin: 2px 0 0; font-size: 0.82rem; color: var(--ink-2); }
+.proposal-source {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--yamabuki-text);
+  background: var(--yamabuki-soft);
+  border-radius: var(--r-pill);
+  padding: 2px 8px;
+  letter-spacing: 0.04em;
+}
+.proposal-matched { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.proposal-matched li {
+  font-size: 0.72rem;
+  color: var(--tetsu-2);
+  background: var(--tetsu-soft);
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
+}
+.proposal-days { display: flex; flex-direction: column; gap: 8px; }
+.proposal-day-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  border-bottom: 1px dashed var(--line-2);
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+}
+.proposal-spots { list-style: none; margin: 0; padding: 0; counter-reset: spot; }
+.proposal-spots li {
+  position: relative;
+  padding: 3px 0 3px 26px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  counter-increment: spot;
+}
+/* 訪問順：鉄色の小さな番号（日程の訪問順バッジと同じ見立て） */
+.proposal-spots li::before {
+  content: counter(spot);
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--tetsu);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-family: var(--font-num);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.proposal-spots li.is-food::before { background: var(--yamabuki); color: var(--ink); }
+.proposal-spot-name { font-weight: 600; }
+.proposal-spot-meta { font-size: 0.72rem; color: var(--ink-2); font-family: var(--font-num); }
+.proposal-new { color: var(--yamabuki-text); background: var(--yamabuki-soft); padding: 0 6px; border-radius: var(--r-pill); font-size: 0.66rem; }
+.proposal-spot-note { font-size: 0.74rem; color: var(--ink-2); }
+.proposal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.proposal-votes { display: flex; align-items: baseline; gap: 2px; color: var(--shu); font-family: var(--font-num); }
+.proposal-votes b { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+.proposal-votes span { font-size: 0.75rem; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.proposal-actions .btn { flex: 1; }
+
+/* ===== 要望の集計チップ（雰囲気の票数を横棒で） ===== */
+.tally-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+.tally-label { font-size: 0.72rem; color: var(--ink-2); font-weight: 600; margin-right: 2px; }
+.tally-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  font-size: 0.76rem;
+  background: var(--card);
+  overflow: hidden;
+}
+.tally-chip i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--w, 0%); background: var(--tetsu-soft); z-index: 0; }
+.tally-chip > * { position: relative; z-index: 1; }
+.tally-chip b { color: var(--tetsu-2); font-family: var(--font-num); }
+.tally-chip-flat { background: var(--paper-2); }
+
+/* ===== スナックバー ===== */
+.snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 12px 20px;
+  border-radius: var(--r-card);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: transform 0.25s, opacity 0.25s;
+  z-index: 3000;
+  pointer-events: none;
+  max-width: 90vw;
+}
+.snackbar.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.snackbar button {
+  margin-left: 14px;
+  background: none;
+  border: none;
+  color: #f2c26b; /* 墨の上で読める山吹 */
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.snackbar button:hover { text-decoration: underline; }
+
+/* ===== カテゴリバッジ（観光＝鉄色／グルメ＝山吹／宿＝墨） ===== */
+.cat-badge {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.04em;
+}
+.cat-sightseeing { background: var(--tetsu-soft); color: var(--tetsu-2); }
+.cat-food { background: var(--yamabuki-soft); color: var(--yamabuki-text); }
+.cat-neutral { background: var(--paper-2); color: var(--ink-2); }
+.cat-hotel { background: #e6e6ea; color: #3b3f52; }
+
+/* 評価：★だけ山吹、数値は本文色 */
+.pr-rating { color: var(--ink); font-size: 0.8rem; font-weight: 600; font-family: var(--font-num); display: inline-block; }
+.pr-rating::first-letter { color: var(--yamabuki); }
+.pr-rating .count { color: var(--ink-2); font-weight: 400; }
